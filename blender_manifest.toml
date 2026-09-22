@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "script_manager_pro"
-version = "0.0.3"
+version = "0.1.0"
 name = "Script Manager Pro"
 tagline = "Manage and run Python scripts with one-click access"
 maintainer = "Cemil Berk <cemildesign@hotmail.com>"
