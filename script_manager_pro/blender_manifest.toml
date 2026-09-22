@@ -9,6 +9,8 @@ type = "add-on"
 
 blender_version_min = "4.4.0"
 
+tags = ["Development"]
+
 license = [
   "SPDX:GPL-3.0-or-later",
 ]

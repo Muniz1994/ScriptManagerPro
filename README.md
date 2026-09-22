@@ -20,15 +20,36 @@ A Blender add-on for managing and running external Python scripts with one-click
 
 ## Installation
 
-### As Blender Extension (Recommended)
-1. Download the latest release `.zip`
+### From a `.zip` (Recommended)
+1. Download the latest release `.zip` (or build it yourself, see [Building](#building))
 2. In Blender, go to **Edit > Preferences > Get Extensions**
-3. Click the dropdown arrow and select **Install from Disk**
-4. Select the downloaded `.zip` file
+3. Click the dropdown arrow (top right) and select **Install from Disk**
+4. Select the `.zip` file
 
 ### Manual Installation
 1. Clone or download this repository
-2. Copy the `script_manager_pro` folder to your Blender extensions directory
+2. Copy the `script_manager_pro` folder into your Blender extensions directory
+   (`.../Blender/<version>/extensions/user_default/`)
+
+## Building
+
+The repository is laid out so the add-on folder is the thing that gets zipped.
+To produce an installable archive:
+
+```
+python build.py
+```
+
+This writes `dist/script_manager_pro-<version>.zip`, containing
+`script_manager_pro/` as its single top-level folder with the manifest and
+sources inside, and excluding `__pycache__` and compiled files. That is the
+layout Blender expects from **Install from Disk**.
+
+If you prefer Blender's own packer, this works too:
+
+```
+blender --command extension build --source-dir script_manager_pro --output-dir dist
+```
 
 ## Setup
 
@@ -126,10 +147,12 @@ script), it is discarded and the file's value is used.
 ## Project Structure
 
 ```
-script_manager_pro/
-├── __init__.py              # Add-on registration, operators, panel and preferences
-├── script_parameters.py     # @PARAM discovery, validation and value substitution
-├── blender_manifest.toml    # Blender extension manifest
+.
+├── script_manager_pro/          # The add-on itself - this folder is what gets zipped
+│   ├── __init__.py              # Add-on registration, operators, panel and preferences
+│   ├── script_parameters.py     # @PARAM discovery, validation and value substitution
+│   └── blender_manifest.toml    # Blender extension manifest
+├── build.py                     # Packs script_manager_pro/ into dist/*.zip
 └── README.md
 ```
 
