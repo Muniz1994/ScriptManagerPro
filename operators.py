@@ -82,6 +82,11 @@ class SMP_OT_run_script(Operator):
         if not os.path.isfile(self.path):
             self.report({'ERROR'}, f"File not found: {self.path}")
             return {'CANCELLED'}
+        # Optional @PARAM overrides; None means run the file as is.
+        from .parameters import operators as params_ops
+        result = params_ops.patched_run(self, context, self.path)
+        if result is not None:
+            return result
         name = os.path.basename(self.path)
         try:
             bpy.ops.script.python_file_run(filepath=self.path)
