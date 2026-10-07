@@ -99,6 +99,32 @@ Every row in the **Scripts** list has four buttons:
 
 With more than one folder configured, a **Folders** panel appears. Pick a folder to limit the Tags and Scripts lists to that library, or **All** to see everything.
 
+### Editable parameters (optional)
+
+Off by default. Turn on **Editable Script Parameters** in the preferences to edit selected variables of a script from the sidebar before running it.
+
+Mark a module level variable with an `# @PARAM` comment, above the assignment or at the end of the line:
+
+```python
+# @PARAM: How many copies to create
+copies = 3
+
+use_modifiers = True  # @PARAM
+
+# @PARAM
+scale: float = 1.5
+```
+
+Select a script in the list, then press **Load Parameters** in the **Parameters** panel. Only `str`, `int`, `float` and `bool` literals can be exported; anything else is listed with the reason it was rejected.
+
+| Button | Action |
+|--------|--------|
+| Refresh | Re-read the script from disk |
+| Loop Back | Restore the value(s) written in the file |
+| Checkmark | Save the edited values to `metadata.json` so they survive a restart |
+
+When a script has edited values, **Play** writes a patched copy to `<folder>/.temp/`, runs it with `script.python_file_run` and deletes it right after. **Your `.py` file is never modified.** In that run `__file__` points to the copy inside `.temp/`, so scripts that locate sibling files through `__file__` should be run without overrides.
+
 
 ## Preferences
 
@@ -109,6 +135,7 @@ With more than one folder configured, a **Folders** panel appears. Pick a folder
 | **Script Folders** | Library folders, scanned recursively on Refresh |
 | **Backup on Save** | Keep a copy of the old file before **Update & Save** overwrites it |
 | **Keep Backups** | How many backups to keep per script (default 10) |
+| **Editable Script Parameters** | Show the Parameters panel for `# @PARAM` variables (off by default) |
 
 Backups are stored in `<folder>/.script_manager/backups/`.
 
