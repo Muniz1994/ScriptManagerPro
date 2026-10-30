@@ -3,8 +3,8 @@
 Turned on with "Editable Script Parameters" in the add-on preferences. While it
 is off nothing here touches the disk and the Play button runs scripts exactly
 as before. While it is on, a run with overridden values executes a patched copy
-written to <library>/.temp/ with `bpy.ops.script.python_file_run`, deleted
-right after — the original .py file is never modified.
+written to <library>/.script_manager/temp/ with `bpy.ops.script.python_file_run`,
+deleted right after — the original .py file is never modified.
 """
 
 if "properties" in locals():

@@ -48,6 +48,7 @@ class SMP_ParamItem(PropertyGroup):
     line: IntProperty(default=0)
     is_valid: BoolProperty(default=True)
     error: StringProperty(default="")
+    warning: StringProperty(default="")
 
     val_bool: BoolProperty(default=False)
     val_int: IntProperty(default=0)
@@ -160,7 +161,7 @@ def scan_param_set(pset, saved=None):
     try:
         source = parsing.read_source(pset.path)
     except (OSError, UnicodeDecodeError) as exc:
-        pset.error = f"Could not read script: {exc}"
+        pset.error = f"Could not read script: {parsing.describe_read_error(exc)}"
         return False
 
     parsed_params, errors = parsing.parse_exported_parameters(source)
@@ -171,6 +172,7 @@ def scan_param_set(pset, saved=None):
         param.name = parsed.name
         param.description = parsed.description
         param.line = parsed.line
+        param.warning = parsed.warning
 
         if not parsed.valid:
             param.is_valid = False

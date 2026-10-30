@@ -48,6 +48,11 @@ class SMP_AddonPreferences(AddonPreferences):
         ),
         default=False,
     )
+    show_param_descriptions: BoolProperty(
+        name="Show Descriptions",
+        description="Show the description of each parameter under its field",
+        default=True,
+    )
 
     def draw(self, context):
         layout = self.layout

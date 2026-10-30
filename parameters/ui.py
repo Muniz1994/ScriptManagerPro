@@ -3,6 +3,7 @@
 import bpy
 from bpy.types import Panel
 
+from .. import utils
 from ..ui import _SidebarMixin
 from . import operators, properties
 
@@ -29,6 +30,10 @@ def _draw_params(layout, context):
     reset_all.path = item.path
     reset_all.param_name = ""
     header.operator("smp.params_save", text="", icon='CHECKMARK').path = item.path
+    prefs = utils.get_prefs(context)
+    show_descriptions = prefs is None or prefs.show_param_descriptions
+    if prefs is not None:
+        header.prop(prefs, "show_param_descriptions", text="", icon='INFO')
 
     for line in pset.error.split("\n"):
         if line:
@@ -57,7 +62,11 @@ def _draw_params(layout, context):
         else:
             row.label(text="", icon='BLANK1')
 
-        if param.description:
+        if param.warning:
+            sub = col.row()
+            sub.active = False
+            sub.label(text=param.warning, icon='ERROR')
+        if param.description and show_descriptions:
             sub = col.row()
             sub.active = False
             sub.label(text=param.description)
@@ -72,13 +81,14 @@ def _draw_params(layout, context):
 def draw_preferences(layout, prefs):
     box = layout.box()
     box.prop(prefs, "enable_parameters")
+    if not prefs.enable_parameters:
+        return
     col = box.column(align=True)
-    col.active = prefs.enable_parameters
     col.label(text="Mark a module level variable to edit it in the Parameters panel:", icon='INFO')
     col.label(text="    # @PARAM")
     col.label(text="    copies = 3")
     col.label(text="Only str, int, float and bool values can be exported.")
-    col.label(text="Runs with edited values use a temporary copy in <folder>/.temp/")
+    col.label(text="Runs with edited values use a temporary copy in <folder>/.script_manager/temp/")
 
 
 class _ParamsPanelMixin(_SidebarMixin):

@@ -42,17 +42,18 @@ def _save_text(operator, context, text):
             operator.report({'WARNING'}, f"Backup failed: {exc}")
     try:
         bpy.ops.text.save()
-        return True
     except RuntimeError:
-        pass
-    # Fallback for contexts where text.save cannot run.
-    try:
-        with open(abs_path, "w", encoding="utf-8") as fh:
-            fh.write(text.as_string())
-        return True
-    except OSError as exc:
-        operator.report({'ERROR'}, f"Could not save: {exc}")
-        return False
+        # Fallback for contexts where text.save cannot run.
+        try:
+            with open(abs_path, "w", encoding="utf-8") as fh:
+                fh.write(text.as_string())
+        except OSError as exc:
+            operator.report({'ERROR'}, f"Could not save: {exc}")
+            return False
+    # Keep a loaded Parameters panel in step with the new defaults.
+    from .parameters import operators as params_ops
+    params_ops.rescan_after_save(context, abs_path)
+    return True
 
 
 class SMP_OT_refresh(Operator):
@@ -130,6 +131,13 @@ class SMP_OT_open_in_editor(Operator):
         space.show_line_numbers = True
         space.show_syntax_highlight = True
         space.show_region_ui = True  # keep the Script Manager sidebar available
+
+        # Select the row too, so the Parameters panel shows the opened script.
+        wm = context.window_manager
+        for i, item in enumerate(wm.smp_scripts):
+            if item.path == self.path:
+                wm.smp_active_script = i
+                break
         self.report({'INFO'}, f"Opened {text.name}")
         return {'FINISHED'}
 
@@ -415,6 +423,11 @@ class SMP_OT_save_and_run(Operator):
         if not _save_text(self, context, text):
             return {'CANCELLED'}
         abs_path = os.path.normpath(bpy.path.abspath(text.filepath))
+        # Same @PARAM overrides as the Play button; None means run the file as is.
+        from .parameters import operators as params_ops
+        result = params_ops.patched_run(self, context, abs_path)
+        if result is not None:
+            return result
         try:
             bpy.ops.script.python_file_run(filepath=abs_path)
         except RuntimeError as exc:

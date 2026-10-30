@@ -77,6 +77,8 @@ class ExportedParameter:
     line: int = 0
     valid: bool = True
     error: str = ""
+    #: Non-blocking problem, e.g. the variable is assigned again further down.
+    warning: str = ""
     #: ``(lineno, col_offset, end_lineno, end_col_offset)`` of the value
     #: expression, used to rewrite it when overrides are applied.
     value_span: tuple | None = None
@@ -102,6 +104,13 @@ def read_source(path):
     """Read a script from disk, normalising line endings to ``\\n``."""
     with open(path, "r", encoding="utf-8") as handle:
         return handle.read()
+
+
+def describe_read_error(exc):
+    """User facing text for an exception raised by :func:`read_source`."""
+    if isinstance(exc, UnicodeDecodeError):
+        return "only UTF-8 encoded scripts are supported"
+    return str(exc)
 
 
 def _collect_comments(source):
@@ -280,6 +289,33 @@ def _build_parameter(node, description):
     )
 
 
+_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+
+def _module_stores(node):
+    """Yield the ``ast.Name`` nodes ``node`` assigns in module scope.
+
+    Function and class bodies are skipped: they have their own scope.
+    """
+    if isinstance(node, _SCOPE_NODES):
+        return
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        yield node
+    for child in ast.iter_child_nodes(node):
+        yield from _module_stores(child)
+
+
+def _find_reassignment(tree, param):
+    """Line of the first module level assignment to ``param`` after its own."""
+    for node in tree.body:
+        if node.lineno <= param.line:
+            continue
+        for name in _module_stores(node):
+            if name.id == param.name:
+                return name.lineno
+    return None
+
+
 def parse_exported_parameters(source):
     """Scan ``source`` for ``@PARAM`` parameters.
 
@@ -321,6 +357,12 @@ def parse_exported_parameters(source):
             )
         else:
             seen[param.name] = param.line
+            reassigned = _find_reassignment(tree, param)
+            if reassigned is not None:
+                param.warning = (
+                    f"reassigned on line {reassigned}; the edited value is "
+                    "overwritten there"
+                )
         parameters.append(param)
 
     errors = [
@@ -403,13 +445,20 @@ def apply_overrides(source, overrides):
 
     if not replacements:
         return source, []
+    return _splice(source, replacements), applied
 
+
+def _splice(source, edits):
+    """Replace each ``(lineno, col, end_lineno, end_col)`` span with its text.
+
+    A span with equal start and end inserts the text at that position.
+    """
     data = source.encode("utf-8")
     # ``ast`` column offsets are byte offsets into the UTF-8 encoded line, so
     # the splice is done on bytes to stay correct for non-ASCII sources.
     starts = _line_start_offsets(data)
     spans = []
-    for (lineno, col, end_lineno, end_col), text in replacements:
+    for (lineno, col, end_lineno, end_col), text in edits:
         if lineno - 1 >= len(starts) or end_lineno - 1 >= len(starts):
             continue
         spans.append((starts[lineno - 1] + col, starts[end_lineno - 1] + end_col, text))
@@ -417,4 +466,65 @@ def apply_overrides(source, overrides):
     for start, end, text in sorted(spans, key=lambda item: item[0], reverse=True):
         data = data[:start] + text.encode("utf-8") + data[end:]
 
-    return data.decode("utf-8"), applied
+    return data.decode("utf-8")
+
+
+_COMPOUND_STATEMENTS = tuple(
+    getattr(ast, name)
+    for name in (
+        "FunctionDef", "AsyncFunctionDef", "ClassDef", "If", "For", "AsyncFor",
+        "While", "With", "AsyncWith", "Try", "TryStar", "Match",
+    )
+    if hasattr(ast, name)
+)
+
+
+def _is_docstring(node):
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    )
+
+
+def _is_future_import(node):
+    return isinstance(node, ast.ImportFrom) and node.module == "__future__"
+
+
+def inject_file_path(source, path):
+    """Return ``source`` with ``__file__`` set to ``path`` before any other code.
+
+    A patched copy runs from a temporary folder, so without this the script
+    would see the copy's path and fail to find files next to the original.
+    The assignment is added to an existing line, so line numbers reported in
+    tracebacks still match the original file.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return source
+    if not tree.body:
+        return source
+
+    assignment = f"__file__ = {value_to_literal(path)}"
+
+    # The docstring and ``from __future__`` imports must stay first.
+    header = None
+    for index, node in enumerate(tree.body):
+        if (index == 0 and _is_docstring(node)) or _is_future_import(node):
+            header = node
+        else:
+            break
+    if header is not None:
+        end = (_node_end_line(header), header.end_col_offset)
+        return _splice(source, [(end + end, f"; {assignment}")])
+
+    first = tree.body[0]
+    if not isinstance(first, _COMPOUND_STATEMENTS):
+        start = (first.lineno, first.col_offset)
+        return _splice(source, [(start + start, f"{assignment}; ")])
+
+    # A compound statement cannot share its line, so this rare case (no
+    # docstring, the file opens with a def, class, if, ...) gets a line of
+    # its own and its line numbers shift by one.
+    return f"{assignment}\n{source}"
